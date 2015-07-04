@@ -1,0 +1,54 @@
+Objects and Methods
+    GuildWars2_API
+
+        METHODS
+            make_request(endpoint_url, payload='', headers={}, auth=False)
+                """
+                Make a request to the Guild Wars 2 API.
+
+                PARAMETERS
+                endpoint_url    String of the URL endpoint.
+                payload         String of the payload to be sent. Defaults to a                                     null string.
+                headers         Dict of the headers to be sent. Appended to the                                     standard headers. Defaults to an empty dict.
+                auth            Boolean of whether this request should be                                           authenticated. Defaults to False.
+
+                RETURN VALUES
+                Python formatted JSON (dict)
+                """
+
+            token_from_file(file_path)
+                """
+                Load a token from a text file.
+
+                PARAMETERS
+                file_path       String of the path to the file.
+
+                RETURN VALUES
+                True if successful, False if not.
+                """
+
+            token_from_string(token)
+                """
+                Load a token from a string.
+
+                PARAMETERS
+                token           String of the token to be set.
+
+                RETURN VALUES
+                The string Token value.
+                """
+
+            std_headers(auth=False)
+                """
+                Gets the standard headers.
+
+                PARAMETERS
+                auth            Boolean of whether the headers are for an                                           authenticated request or not. Defaults to                                       False.
+
+                RETURN VALUES
+                A dict of header values.
+                """
+
+        PROPERTIES
+            _token          String Token Value
+            _base_url       String of the base URL for Guild Wars 2 API calls.
