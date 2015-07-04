@@ -41,8 +41,9 @@ log_handler.setFormatter(logging.Formatter('%(asctime)s <%(levelname)s> '
 logger.addHandler(log_handler)
 logger.addHandler(log_handler)
 
+
 # Broker Objects ---------------------------------------------------------------
-class GuildWars2_Broker(object):
+class GuildWars2Broker(object):
     """
     Provides methods and properties for making API reqeusts, tracking API
     tokens, and maintaining a connection.
@@ -93,9 +94,10 @@ class GuildWars2_Broker(object):
             api_headers.update(headers)
         # Build the request.
         logger.debug('Requesting:\n'
-                     ' URL: {0}\n'
-                     ' Data: {1}\n'
-                     ' Headers: {2}'.format(api_url, api_payload, api_headers))
+                     '    URL: {0}\n'
+                     '    Data: {1}\n'
+                     '    Headers: {2}'.format(api_url, api_payload,
+                                               api_headers))
         req = urllib2.Request(api_url, data=api_payload, headers=api_headers)
         # Call the request and get response.
         try:
@@ -152,13 +154,15 @@ class GuildWars2_Broker(object):
         else:
             return {}
 
+
 # API Base Class ---------------------------------------------------------------
-class GW2_API(object):
+class GW2API(object):
     _endpoint_url = ''
 
     def __init__(self, broker=None):
-        self._broker = GuildWars2_Broker()
+        self._broker = GuildWars2Broker()
         if broker:
+            assert isinstance(broker, GuildWars2Broker)
             self._broker = broker
         self.ids = None
 
@@ -185,21 +189,26 @@ class GW2_API(object):
                 else:
                     return res
 
-class GW2_Authenticated_API(GW2_API):
+
+class GW2AuthenticatedAPI(GW2API):
     def __init__(self, broker=None, token=None):
-        if (not token and not broker) or (broker and not broker._token):
+        if not token and not broker:
             raise AuthorizationRequired('This object requires a broker object '
                                         'with a token or a token string or '
                                         'file.')
         elif token and not broker:
-            self._broker = GuildWars2_Broker()
+            self._broker = GuildWars2Broker()
             if os.path.exists(token):
                 self._broker.token_from_file(token)
             else:
                 self._broker.token_from_string(token)
         elif broker and not token:
+            if type(broker) is not GuildWars2Broker or not broker._token:
+                raise AuthorizationRequired('This object requires a broker '
+                                            'object with a token.')
             self._broker = broker
         self.ids = None
+
 
 # Error Objects ----------------------------------------------------------------
 class AuthorizationRequired(Exception):
@@ -208,14 +217,16 @@ class AuthorizationRequired(Exception):
     """
     pass
 
+
 class APIError(Exception):
     """
     Error returned for general failures.
     """
     pass
 
+
 # API Objects ------------------------------------------------------------------
-class Account(GW2_Authenticated_API):
+class Account(GW2AuthenticatedAPI):
     """
     Provides access to account metadata.
     """
@@ -232,7 +243,7 @@ class Account(GW2_Authenticated_API):
             NOTE: Either a token, token file path, or Broker with a loaded token
             must be provided. Requests will fail otherwise!
             """
-        super(Account, self).__init__(broker=broker)
+        super(Account, self).__init__(token=token, broker=broker)
         info = self._broker.make_request(self._endpoint_url, auth=True)
         self.id = info['id']
         self.name = info['name']
@@ -265,6 +276,7 @@ class Account(GW2_Authenticated_API):
         api_url = '{0}/materials'.format(self._endpoint_url)
         return Materials(self._broker.make_request(api_url, auth=True))
 
+
 class Bank(object):
     """
     Representation of the Bank vault.
@@ -275,6 +287,7 @@ class Bank(object):
     full        Int, Count of occupied bank spaces.
     total       Int, Count of total bank spaces.
     """
+
     def __init__(self, bank_dict):
         """
         Prepares the GW2_Authenticated_API for use.
@@ -293,6 +306,7 @@ class Bank(object):
         """
         return 'Bank ({0}/{1})'.format(self.full, self.total)
 
+
 class Materials(object):
     """
     Representation of the materials store.
@@ -300,6 +314,7 @@ class Materials(object):
     PUBLIC PROPERTIES
     contents        List of Dict, Contents of the materials vault.
     """
+
     def __init__(self, mats_dict):
         """
         Prepares the GW2_Authenticated_API for use.
@@ -315,21 +330,22 @@ class Materials(object):
         """
         return 'Materials'
 
-class Character(GW2_Authenticated_API):
+
+class Character(GW2AuthenticatedAPI):
     _endpoint_url = '/v2/characters'
 
-    def __init__(self):
-        super(Character, self).__init__(broker=broker)
+    def __init__(self, broker=None, token=None):
+        super(Character, self).__init__(broker=broker, token=token)
 
 
-class TokenInfo(GW2_Authenticated_API):
+class TokenInfo(GW2AuthenticatedAPI):
     _endpoint_url = '/v2/tokeninfo'
 
-    def __init__(self):
-        super(TokenInfo, self).__init__(broker=broker)
+    def __init__(self, broker=None, token=None):
+        super(TokenInfo, self).__init__(broker=broker, token=token)
 
 
-class Items(GW2_API):
+class Items(GW2API):
     _endpoint_url = '/v2/items'
 
     def __init__(self, broker=None):
@@ -337,42 +353,42 @@ class Items(GW2_API):
         self.ids = self._broker.make_request(self._endpoint_url)
 
 
-class Recipes(GW2_API):
+class Recipes(GW2API):
     _endpoint_url = '/v2/recipes'
 
-    def __init__(self):
+    def __init__(self, broker=None):
         super(Recipes, self).__init__(broker=broker)
 
 
-class Skins(GW2_API):
+class Skins(GW2API):
     _endpoint_url = '/v2/skins'
 
-    def __init__(self):
+    def __init__(self, broker=None):
         super(Skins, self).__init__(broker=broker)
 
 
-class Continents(GW2_API):
+class Continents(GW2API):
     _endpoint_url = '/v2/continents'
 
-    def __init__(self):
+    def __init__(self, broker=None):
         super(Continents, self).__init__(broker=broker)
 
 
-class Maps(GW2_API):
+class Maps(GW2API):
     _endpoint_url = '/v2/maps'
 
-    def __init__(self):
+    def __init__(self, broker=None):
         super(Maps, self).__init__(broker=broker)
 
 
-class Build(GW2_API):
+class Build(GW2API):
     _endpoint_url = '/v2/build'
 
-    def __init__(self):
+    def __init__(self, broker=None):
         super(Build, self).__init__(broker=broker)
 
 
-class Colors(GW2_API):
+class Colors(GW2API):
     """
     Access the colors of Guild Wars 2.
 
@@ -445,14 +461,14 @@ class Color(object):
         return 'Color {0} ({1})'.format(self.name, self.id)
 
 
-class Assets(GW2_API):
+class Assets(GW2API):
     _endpoint_url = '/v2/files'
 
-    def __init__(self):
+    def __init__(self, broker=None):
         super(Assets, self).__init__(broker=broker)
 
 
-class Quaggans(GW2_API):
+class Quaggans(GW2API):
     """
     Allows access to the quaggan GW2_APIs.
 
@@ -476,7 +492,7 @@ class Quaggans(GW2_API):
         self.ids = self._broker.make_request(self._endpoint_url)
 
 
-class Worlds(GW2_API):
+class Worlds(GW2API):
     """
     Interface to the Worlds API.
 
@@ -514,6 +530,7 @@ class Worlds(GW2_API):
         GW2_APIs otherwise.
         """
         return super(Worlds, self).get(world_id, World)
+
 
 class World(object):
     """
@@ -561,7 +578,7 @@ class World(object):
 
 if __name__ == '__main__':
     token_file = 'token.txt'
-    broker = GuildWars2_Broker()
+    broker = GuildWars2Broker()
     broker.token_from_file(token_file)
 
     import pprint
