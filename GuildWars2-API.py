@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 import urllib
 import urllib2
 
@@ -27,6 +29,16 @@ import urllib2
 # /v2/skins
 # /v2/tokeninfo
 # /v2/worlds
+
+logger = logging.getLogger('__main__')
+logger.setLevel(logging.DEBUG)
+log_handler = logging.FileHandler('GuildWars2-API.log', mode='w')
+log_handler.setLevel(logging.DEBUG)
+log_handler.setFormatter(logging.Formatter('%(asctime)s <%(levelname)s> '
+                                           '<%(module)s.%(funcName)s> '
+                                           '%(message)s'))
+logger.addHandler(log_handler)
+logger.addHandler(log_handler)
 
 
 class GuildWars2_Broker(object):
@@ -70,6 +82,10 @@ class GuildWars2_Broker(object):
         if headers:
             api_headers.update(headers)
         # Build the request.
+        logger.debug('Requesting:\n'
+                     ' URL: {0}\n'
+                     ' Data: {1}\n'
+                     ' Headers: {2}'.format(api_url, api_payload, api_headers))
         req = urllib2.Request(api_url, data=api_payload, headers=api_headers)
         # Call the request and get response.
         try:
@@ -144,9 +160,110 @@ class Account(object):
     """
     _endpoint_url = '/v2/account'
 
-    def __init__(self):
-        pass
+    def __init__(self, token=None, broker=None):
+        """
+        Prepares the object for use.
 
+        PARAMETERS
+        token       String of the token or path to token file.
+        broker      Broker object to use for requests.
+
+        NOTE: Either a token, token file path, or Broker with a loaded token
+        must be provided. Requests will fail otherwise!
+        """
+        if (not token and not broker) or (broker and not broker._token):
+            raise AuthorizationRequried('This object requires a broker object '
+                                        'with a token or a token string or '
+                                        'file.')
+        elif token and not broker:
+            self._broker = GuildWars2_Broker()
+            if os.path.exists(token):
+                self._broker.token_from_file(token)
+            else:
+                self._broker.token_from_string(token)
+        elif broker and not token:
+            self._broker = broker
+        info = self._broker.make_request(self._endpoint_url, auth=True)
+        self.id = info['id']
+        self.name = info['name']
+        self.created = info['created']
+        self.world = Worlds(broker=self._broker).get(info['world'])
+        self.guilds = info['guilds']
+
+    def __repr__(self):
+        return self.name
+
+    @property
+    def bank(self):
+        """
+        Gets the bank object for the current account.
+
+        RETURN VALUE
+        Bank object for the bank.
+        """
+        api_url = '{0}/bank'.format(self._endpoint_url)
+        return Bank(self._broker.make_request(api_url, auth=True))
+
+    @property
+    def materials(self):
+        """
+        Gets the materials store object for the current account.
+
+        RETURN VALUE
+        Materials object for the materials store.
+        """
+        api_url = '{0}/materials'.format(self._endpoint_url)
+        return Materials(self._broker.make_request(api_url, auth=True))
+
+class Bank(object):
+    """
+    Representation of the Bank vault.
+
+    PUBLIC PROPERTIES
+    contents    List of Dict, Contents of the Bank Vault
+    empty       Int, Count of empty bank spaces.
+    full        Int, Count of occupied bank spaces.
+    total       Int, Count of total bank spaces.
+    """
+    def __init__(self, bank_dict):
+        """
+        Prepares the object for use.
+
+        PARAMETERS
+        bank_dict       List of Dict returned by API call.
+        """
+        self.contents = bank_dict
+        self.total = len(self.contents)
+        self.empty = len([item for item in self.contents if not item])
+        self.full = self.total - self.empty
+
+    def __repr__(self):
+        """
+        Returns "Bank ({full}/{total})"
+        """
+        return 'Bank ({0}/{1})'.format(self.full, self.total)
+
+class Materials(object):
+    """
+    Representation of the materials store.
+
+    PUBLIC PROPERTIES
+    contents        List of Dict, Contents of the materials vault.
+    """
+    def __init__(self, mats_dict):
+        """
+        Prepares the object for use.
+
+        PARAMETERS
+        mats_dict       List of Dict returned by API call.
+        """
+        self.contents = mats_dict
+
+    def __repr__(self):
+        """
+        Returns "Materials"
+        """
+        return 'Materials'
 
 class Character(object):
     _endpoint_url = '/v2/characters'
@@ -165,8 +282,28 @@ class TokenInfo(object):
 class Items(object):
     _endpoint_url = '/v2/items'
 
-    def __init__(self):
-        pass
+    def __init__(self, broker=None):
+        self._broker = GuildWars2_Broker()
+        if broker:
+            self._broker = broker
+        self.ids = self._broker.make_request(self._endpoint_url)
+
+    def get(self, item_id):
+        if type(item_id) in (list, tuple):
+            if not all(item in self.ids for item in item_id):
+                return None
+            else:
+                item_id = [str(item) for item in item_id]
+                return self._broker.make_request(self._endpoint_url,
+                                                 {'ids': ','.join(item_id)})
+        elif type(item_id) is int:
+            if item_id not in self.ids:
+                return None
+            else:
+                return self._broker.make_request(self._endpoint_url,
+                                                 {'id': item_id})
+        else:
+            return None
 
 
 class Recipes(object):
@@ -355,23 +492,138 @@ class Quaggans(object):
 
 
 class Worlds(object):
+    """
+    Interface to the Worlds API.
+
+    PUBLIC METHODS
+    get()           Get a specific id or list or tuple of ids.
+
+    PUBLIC PROPERTIES
+    _broker         Broker object used for requests.
+    _endpoint_url   String of the API endpoint URL.
+    ids             List of integer IDs available.
+    """
     _endpoint_url = '/v2/worlds'
 
-    def __init__(self):
-        pass
+    def __init__(self, broker=None):
+        """
+        Prepares an object for use.
+
+        PARAMETERS
+        broker      Broker object for requests. Creates one if not specified.
+        """
+        self._broker = GuildWars2_Broker()
+        if broker:
+            self._broker = broker
+        self.ids = self._broker.make_request(self._endpoint_url)
+
+    def get(self, world_id):
+        """
+        Get the specified worlds.
+
+        PARAMETERS
+        world_id        Integer ID of a world, or list or tuple of integers of
+                            world IDs.
+
+        RETURN VALUES
+        Returns None if world_id is not an int, list or tuple, or if any
+        world_ids are not in self.ids. Returns a World object or list of World
+        objects otherwise.
+        """
+        if type(world_id) in (list, tuple):
+            if not all(world in self.ids for world in world_id):
+                return None
+            else:
+                world_id = [str(wid) for wid in world_id]
+                return [World(item)
+                        for item in
+                        self._broker.make_request(self._endpoint_url,
+                                                  {'ids': ','.join(world_id)})
+                        ]
+        elif type(world_id) is int:
+            if world_id not in self.ids:
+                return None
+            else:
+                return World(self._broker.make_request(self._endpoint_url,
+                                                       {'id': world_id}))
+        else:
+            return None
+
+class World(object):
+    """
+    A World (server) in Guild Wars 2.
+
+    PUBLIC PROPERTIES
+    name            String, The name of the server.
+    id              Integer ID of the server.
+    language        String, The language of the server.
+    region          String, The region of the server.
+    """
+    # Lookup tables from here: http://wiki.guildwars2.com/wiki/API:2/worlds
+    region_lookup = {
+        '1': 'North America',
+        '2': 'Europe',
+    }
+
+    lang_lookup = {
+        '0': 'English',
+        '1': 'French',
+        '2': 'German',
+        '3': 'Spanish'
+    }
+
+    def __init__(self, world_dict):
+        """
+        Prepares a World for use.
+
+        PARAMETERS
+        world_dict      Dictionary of World items.
+        """
+        self.name = world_dict['name']
+        self.id = world_dict['id']
+        # Lookup region and language as instructed here:
+        # http://wiki.guildwars2.com/wiki/API:2/worlds
+        self.region = self.region_lookup[str(self.id)[0:1]]
+        self.language = self.lang_lookup[str(self.id)[1:2]]
+
+    def __repr__(self):
+        """
+        Returns the World's name.
+        """
+        return self.name
 
 
 if __name__ == '__main__':
+    token_file = 'token.txt'
+    broker = GuildWars2_Broker()
+    broker.token_from_file(token_file)
+
     import pprint
 
+    # Test Account
+    account = Account(broker=broker)
+    print(account)
+    print(account.id)
+    pprint.pprint(account.guilds)
+    print(account.world)
+    print(account.bank)
+    pprint.pprint(account.bank.contents)
+    print(account.materials)
+    pprint.pprint(account.materials.contents)
+
+    # Test Worlds
+    # worlds = Worlds(broker=broker)
+    # print(worlds.get(1021))
+    # pprint.pprint(worlds.get([1021, 1022, 1023]))
+
     # Test Quaggans
-    quaggans = Quaggans()
-    pprint.pprint(quaggans.ids)
-    pprint.pprint(quaggans.get('404'))
-    pprint.pprint(quaggans.get(['404', 'rain', 'scifi']))
+    # quaggans = Quaggans(broker=broker)
+    # pprint.pprint(quaggans.ids)
+    # pprint.pprint(quaggans.get('404'))
+    # pprint.pprint(quaggans.get(['404', 'rain', 'scifi']))
 
     # Test Colors
-    colors = Colors()
-    pprint.pprint(colors.ids)
-    pprint.pprint(colors.get(10))
-    pprint.pprint(colors.get([10, 11, 12, 13]))
+    # colors = Colors(broker=broker)
+    # pprint.pprint(colors.ids)
+    # pprint.pprint(colors.get(10))
+    # pprint.pprint(colors.get([10, 11, 12, 13]))
