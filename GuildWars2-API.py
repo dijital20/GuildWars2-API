@@ -5,13 +5,41 @@ import sys
 import urllib
 import urllib2
 
-# Active endpoints:
+# Implemented:
 # /v2/account --> Done
 # /v2/account/bank --> Done
 # /v2/account/materials --> Done
+# /v2/colors --> Done
+# /v2/items --> Done
+# /v2/quaggans --> Done
+# /v2/worlds --> Done
+
+# Skipping:
+# /v1/build.json --> Using v2
+# /v1/colors.json --> Using v2
+# /v1/continents.json --> Using v2
+# /v1/files.json --> Using v2
+# /v1/item_details.json --> Using v2
+# /v1/items.json --> Using v2
+# /v1/map_floor.json --> Using v2
+# /v1/map_names.json --> Using v2
+# /v1/maps.json --> Using v2
+# /v1/recipe_details.json --> Using v2
+# /v1/recipes.json --> Using v2
+# /v1/skin_details.json --> Using v2
+# /v1/skins.json --> Using v2
+# /v1/world_names.json --> Using v2
+
+# To Be Implemented
+# /v1/event_details.json
+# /v1/event_names.json
+# /v1/events.json
+# /v1/guild_details.json
+# /v1/wvw/match_details.json
+# /v1/wvw/matches.json
+# /v1/wvw/objective_names.json
 # /v2/build
 # /v2/characters
-# /v2/colors --> Done
 # /v2/commerce/exchange
 # /v2/commerce/exchange/coins
 # /v2/commerce/exchange/gems
@@ -21,15 +49,12 @@ import urllib2
 # /v2/continents
 # /v2/files
 # /v2/floors
-# /v2/items --> Done
 # /v2/maps
 # /v2/materials
-# /v2/quaggans --> Done
 # /v2/recipes
 # /v2/recipes/search
 # /v2/skins
 # /v2/tokeninfo
-# /v2/worlds --> Done
 
 # Logging ----------------------------------------------------------------------
 logger = logging.getLogger('__main__')
