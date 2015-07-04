@@ -71,7 +71,16 @@ class GuildWars2_Broker(object):
 
         RETURN VALUES
         Python formatted JSON (dict)
+
+        RAISES
+        AuthorizationRequired   If auth is True, and self._token is set to None.
+        APIError                If there is a bad response off of the request.
         """
+        if auth and not self._token:
+            raise AuthorizationRequired('This request requires authentication '
+                                        'that is not present. Please set a '
+                                        'token using token_from_string() or '
+                                        'token_from_file() first.')
         # Build the url, including params if they are given.
         api_url = '{0}{1}'.format(self._base_url, endpoint_url)
         if params:
@@ -110,6 +119,7 @@ class GuildWars2_Broker(object):
         """
         token = open(file_path, mode='r').read()
         self._token = token
+        logger.debug('Token set to: {0}'.format(self._token))
         return token
 
     def token_from_string(self, token):
@@ -123,6 +133,7 @@ class GuildWars2_Broker(object):
         The string Token value.
         """
         self._token = token
+        logger.debug('Token set to: {0}'.format(self._token))
         return token
 
     def std_headers(self, auth=False):
@@ -130,7 +141,8 @@ class GuildWars2_Broker(object):
         Gets the standard headers.
 
         PARAMETERS
-        auth            Boolean of whether the headers are for an                                           authenticated request or not. Defaults to                                       False.
+        auth            Boolean of whether the headers are for an authenticated
+                            request or not. Defaults to False.
 
         RETURN VALUES
         A dict of header values.
@@ -176,7 +188,7 @@ class GW2_API(object):
 class GW2_Authenticated_API(GW2_API):
     def __init__(self, broker=None, token=None):
         if (not token and not broker) or (broker and not broker._token):
-            raise AuthorizationRequried('This object requires a broker object '
+            raise AuthorizationRequired('This object requires a broker object '
                                         'with a token or a token string or '
                                         'file.')
         elif token and not broker:
@@ -190,7 +202,7 @@ class GW2_Authenticated_API(GW2_API):
         self.ids = None
 
 # Error Objects ----------------------------------------------------------------
-class AuthorizationRequried(Exception):
+class AuthorizationRequired(Exception):
     """
     Error returned when authorization is required.
     """
@@ -555,20 +567,20 @@ if __name__ == '__main__':
     import pprint
 
     # Test Account
-    # account = Account(broker=broker)
-    # print(account)
-    # print(account.id)
-    # pprint.pprint(account.guilds)
-    # print(account.world)
-    # print(account.bank)
-    # pprint.pprint(account.bank.contents)
-    # print(account.materials)
-    # pprint.pprint(account.materials.contents)
+    account = Account(broker=broker)
+    print(account)
+    print(account.id)
+    pprint.pprint(account.guilds)
+    print(account.world)
+    print(account.bank)
+    pprint.pprint(account.bank.contents)
+    print(account.materials)
+    pprint.pprint(account.materials.contents)
 
     # Test Worlds
-    # worlds = Worlds(broker=broker)
-    # print(worlds.get(1021))
-    # pprint.pprint(worlds.get([1021, 1022, 1023]))
+    worlds = Worlds(broker=broker)
+    print(worlds.get(1021))
+    pprint.pprint(worlds.get([1021, 1022, 1023]))
 
     # Test Quaggans
     quaggans = Quaggans(broker=broker)
