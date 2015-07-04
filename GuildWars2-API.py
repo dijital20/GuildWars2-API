@@ -63,7 +63,7 @@ logger.setLevel(logging.DEBUG)
 log_handler = logging.FileHandler('GuildWars2-API.log', mode='w')
 log_handler.setLevel(logging.DEBUG)
 log_handler.setFormatter(logging.Formatter('%(asctime)s <%(levelname)s> '
-                                           '<%(module)s.%(funcName)s> '
+                                           '<%(module)s:%(lineno)d> '
                                            '%(message)s'))
 logger.addHandler(log_handler)
 # Console handler
@@ -433,6 +433,7 @@ class Recipes(GW2API):
 
     def __init__(self, broker=None):
         super(Recipes, self).__init__(broker=broker)
+        self.ids = self._broker.make_request(self._endpoint_url)
 
 
 class Skins(GW2API):
@@ -440,6 +441,7 @@ class Skins(GW2API):
 
     def __init__(self, broker=None):
         super(Skins, self).__init__(broker=broker)
+        self.ids = self._broker.make_request(self._endpoint_url)
 
 
 class Continents(GW2API):
@@ -447,6 +449,7 @@ class Continents(GW2API):
 
     def __init__(self, broker=None):
         super(Continents, self).__init__(broker=broker)
+        self.ids = self._broker.make_request(self._endpoint_url)
 
 
 class Maps(GW2API):
@@ -462,6 +465,7 @@ class Build(GW2API):
 
     def __init__(self, broker=None):
         super(Build, self).__init__(broker=broker)
+        self.ids = self._broker.make_request(self._endpoint_url)
 
 
 class Colors(GW2API):
@@ -542,6 +546,7 @@ class Assets(GW2API):
 
     def __init__(self, broker=None):
         super(Assets, self).__init__(broker=broker)
+        self.ids = self._broker.make_request(self._endpoint_url)
 
 
 class Quaggans(GW2API):
@@ -689,3 +694,11 @@ if __name__ == '__main__':
     maps = Maps(broker=broker)
     pprint.pprint(maps.get(523))
     pprint.pprint(maps.get([523, 524, 525]))
+
+    # Continents
+    continents = Continents(broker=broker)
+    pprint.pprint(continents.get([1, 2]))
+
+    # Recipes
+    recipes = Recipes(broker=broker)
+    pprint.pprint(recipes.get([9892, 9903, 5501]))
