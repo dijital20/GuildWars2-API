@@ -6,12 +6,12 @@ import urllib
 import urllib2
 
 # Active endpoints:
-# /v2/account
-# /v2/account/bank
-# /v2/account/materials
+# /v2/account --> Done
+# /v2/account/bank --> Done
+# /v2/account/materials --> Done
 # /v2/build
 # /v2/characters
-# /v2/colors
+# /v2/colors --> Done
 # /v2/commerce/exchange
 # /v2/commerce/exchange/coins
 # /v2/commerce/exchange/gems
@@ -21,15 +21,15 @@ import urllib2
 # /v2/continents
 # /v2/files
 # /v2/floors
-# /v2/items
+# /v2/items --> Done
 # /v2/maps
 # /v2/materials
-# /v2/quaggans
+# /v2/quaggans --> Done
 # /v2/recipes
 # /v2/recipes/search
 # /v2/skins
 # /v2/tokeninfo
-# /v2/worlds
+# /v2/worlds --> Done
 
 # Logging ----------------------------------------------------------------------
 logger = logging.getLogger('__main__')
