@@ -30,6 +30,7 @@ import urllib2
 # /v2/tokeninfo
 # /v2/worlds
 
+# Logging ----------------------------------------------------------------------
 logger = logging.getLogger('__main__')
 logger.setLevel(logging.DEBUG)
 log_handler = logging.FileHandler('GuildWars2-API.log', mode='w')
@@ -40,7 +41,7 @@ log_handler.setFormatter(logging.Formatter('%(asctime)s <%(levelname)s> '
 logger.addHandler(log_handler)
 logger.addHandler(log_handler)
 
-
+# Broker Objects ---------------------------------------------------------------
 class GuildWars2_Broker(object):
     """
     Provides methods and properties for making API reqeusts, tracking API
@@ -139,38 +140,41 @@ class GuildWars2_Broker(object):
         else:
             return {}
 
+# API Base Class ---------------------------------------------------------------
+class GW2_API(object):
+    _endpoint_url = ''
 
-class AuthorizationRequried(Exception):
-    """
-    Error returned when authorization is required.
-    """
-    pass
+    def __init__(self, broker=None):
+        self._broker = GuildWars2_Broker()
+        if broker:
+            self._broker = broker
+        self.ids = None
 
+    def get(self, object_ids, item_type=None):
+        if type(object_ids) in (list, tuple):
+            if not all(item in self.ids for item in object_ids):
+                return None
+            else:
+                object_ids = [str(item) for item in object_ids]
+                res = self._broker.make_request(self._endpoint_url,
+                                                {'ids': ','.join(object_ids)})
+                if item_type:
+                    return [item_type(item) for item in res]
+                else:
+                    return res
+        else:
+            if object_ids not in self.ids:
+                return None
+            else:
+                res = self._broker.make_request(self._endpoint_url,
+                                                {'id': object_ids})
+                if item_type:
+                    return item_type(res)
+                else:
+                    return res
 
-class APIError(Exception):
-    """
-    Error returned for general failures.
-    """
-    pass
-
-
-class Account(object):
-    """
-    Provides access to account metadata.
-    """
-    _endpoint_url = '/v2/account'
-
-    def __init__(self, token=None, broker=None):
-        """
-        Prepares the object for use.
-
-        PARAMETERS
-        token       String of the token or path to token file.
-        broker      Broker object to use for requests.
-
-        NOTE: Either a token, token file path, or Broker with a loaded token
-        must be provided. Requests will fail otherwise!
-        """
+class GW2_Authenticated_API(GW2_API):
+    def __init__(self, broker=None, token=None):
         if (not token and not broker) or (broker and not broker._token):
             raise AuthorizationRequried('This object requires a broker object '
                                         'with a token or a token string or '
@@ -183,6 +187,40 @@ class Account(object):
                 self._broker.token_from_string(token)
         elif broker and not token:
             self._broker = broker
+        self.ids = None
+
+# Error Objects ----------------------------------------------------------------
+class AuthorizationRequried(Exception):
+    """
+    Error returned when authorization is required.
+    """
+    pass
+
+class APIError(Exception):
+    """
+    Error returned for general failures.
+    """
+    pass
+
+# API Objects ------------------------------------------------------------------
+class Account(GW2_Authenticated_API):
+    """
+    Provides access to account metadata.
+    """
+    _endpoint_url = '/v2/account'
+
+    def __init__(self, token=None, broker=None):
+        """
+            Prepares the GW2_Authenticated_API for use.
+
+            PARAMETERS
+            token       String of the token or path to token file.
+            broker      Broker GW2_Authenticated_API to use for requests.
+
+            NOTE: Either a token, token file path, or Broker with a loaded token
+            must be provided. Requests will fail otherwise!
+            """
+        super(Account, self).__init__(broker=broker)
         info = self._broker.make_request(self._endpoint_url, auth=True)
         self.id = info['id']
         self.name = info['name']
@@ -196,10 +234,10 @@ class Account(object):
     @property
     def bank(self):
         """
-        Gets the bank object for the current account.
+        Gets the bank GW2_Authenticated_API for the current account.
 
         RETURN VALUE
-        Bank object for the bank.
+        Bank GW2_Authenticated_API for the bank.
         """
         api_url = '{0}/bank'.format(self._endpoint_url)
         return Bank(self._broker.make_request(api_url, auth=True))
@@ -207,10 +245,10 @@ class Account(object):
     @property
     def materials(self):
         """
-        Gets the materials store object for the current account.
+        Gets the materials store GW2_Authenticated_API for the current account.
 
         RETURN VALUE
-        Materials object for the materials store.
+        Materials GW2_Authenticated_API for the materials store.
         """
         api_url = '{0}/materials'.format(self._endpoint_url)
         return Materials(self._broker.make_request(api_url, auth=True))
@@ -227,7 +265,7 @@ class Bank(object):
     """
     def __init__(self, bank_dict):
         """
-        Prepares the object for use.
+        Prepares the GW2_Authenticated_API for use.
 
         PARAMETERS
         bank_dict       List of Dict returned by API call.
@@ -252,7 +290,7 @@ class Materials(object):
     """
     def __init__(self, mats_dict):
         """
-        Prepares the object for use.
+        Prepares the GW2_Authenticated_API for use.
 
         PARAMETERS
         mats_dict       List of Dict returned by API call.
@@ -265,83 +303,64 @@ class Materials(object):
         """
         return 'Materials'
 
-class Character(object):
+class Character(GW2_Authenticated_API):
     _endpoint_url = '/v2/characters'
 
     def __init__(self):
-        pass
+        super(Character, self).__init__(broker=broker)
 
 
-class TokenInfo(object):
+class TokenInfo(GW2_Authenticated_API):
     _endpoint_url = '/v2/tokeninfo'
 
     def __init__(self):
-        pass
+        super(TokenInfo, self).__init__(broker=broker)
 
 
-class Items(object):
+class Items(GW2_API):
     _endpoint_url = '/v2/items'
 
     def __init__(self, broker=None):
-        self._broker = GuildWars2_Broker()
-        if broker:
-            self._broker = broker
+        super(Items, self).__init__(broker=broker)
         self.ids = self._broker.make_request(self._endpoint_url)
 
-    def get(self, item_id):
-        if type(item_id) in (list, tuple):
-            if not all(item in self.ids for item in item_id):
-                return None
-            else:
-                item_id = [str(item) for item in item_id]
-                return self._broker.make_request(self._endpoint_url,
-                                                 {'ids': ','.join(item_id)})
-        elif type(item_id) is int:
-            if item_id not in self.ids:
-                return None
-            else:
-                return self._broker.make_request(self._endpoint_url,
-                                                 {'id': item_id})
-        else:
-            return None
 
-
-class Recipes(object):
+class Recipes(GW2_API):
     _endpoint_url = '/v2/recipes'
 
     def __init__(self):
-        pass
+        super(Recipes, self).__init__(broker=broker)
 
 
-class Skins(object):
+class Skins(GW2_API):
     _endpoint_url = '/v2/skins'
 
     def __init__(self):
-        pass
+        super(Skins, self).__init__(broker=broker)
 
 
-class Continents(object):
+class Continents(GW2_API):
     _endpoint_url = '/v2/continents'
 
     def __init__(self):
-        pass
+        super(Continents, self).__init__(broker=broker)
 
 
-class Maps(object):
+class Maps(GW2_API):
     _endpoint_url = '/v2/maps'
 
     def __init__(self):
-        pass
+        super(Maps, self).__init__(broker=broker)
 
 
-class Build(object):
+class Build(GW2_API):
     _endpoint_url = '/v2/build'
 
     def __init__(self):
-        pass
+        super(Build, self).__init__(broker=broker)
 
 
-class Colors(object):
+class Colors(GW2_API):
     """
     Access the colors of Guild Wars 2.
 
@@ -350,21 +369,19 @@ class Colors(object):
 
     PUBLIC PROPERTIES
     _endpoint_url   URL of the API endpoint.
-    _broker         Broker object used for requests.
+    _broker         Broker GW2_API used for requests.
     ids             List of color IDs.
     """
     _endpoint_url = '/v2/colors'
 
     def __init__(self, broker=None):
         """
-        Prepares a Colors object for use.
+        Prepares a Colors GW2_API for use.
 
         PARAMETERS
         broker      Broker to use for requests. If not specified, creates one.
         """
-        self._broker = GuildWars2_Broker()
-        if broker:
-            self._broker = broker
+        super(Colors, self).__init__(broker=broker)
         self.ids = self._broker.make_request(self._endpoint_url)
 
     def get(self, color_id):
@@ -376,26 +393,10 @@ class Colors(object):
 
         RETURN VALUE
         None if any of the specified IDs are not in self.ids. Returns a Color
-        object or list of Color objects otherwise. For more information, see:
+        GW2_API or list of Color GW2_APIs otherwise. For more information, see:
         http://wiki.guildwars2.com/wiki/API:2/colors
         """
-        if type(color_id) in (list, tuple):
-            if not all(item in self.ids for item in color_id):
-                return None
-            else:
-                color_id = [str(cid) for cid in color_id]
-                return [Color(item)
-                        for item in self._broker.make_request(
-                        self._endpoint_url, {'ids': ','.join(color_id)})]
-        elif type(color_id) is int:
-            if color_id not in self.ids:
-                return None
-            else:
-                return Color(
-                    self._broker.make_request(self._endpoint_url,
-                                              {'id': color_id}))
-        else:
-            return None
+        return super(Colors, self).get(color_id, Color)
 
 
 class Color(object):
@@ -413,7 +414,7 @@ class Color(object):
 
     def __init__(self, color_dict):
         """
-        Creates a color object for use.
+        Creates a color GW2_API for use.
 
         PARAMETERS
         color_dict      Dict of color values.
@@ -432,66 +433,38 @@ class Color(object):
         return 'Color {0} ({1})'.format(self.name, self.id)
 
 
-class Assets(object):
+class Assets(GW2_API):
     _endpoint_url = '/v2/files'
 
     def __init__(self):
-        pass
+        super(Assets, self).__init__(broker=broker)
 
 
-class Quaggans(object):
+class Quaggans(GW2_API):
     """
-    Allows access to the quaggan objects.
+    Allows access to the quaggan GW2_APIs.
 
     PUBLIC METHODS
     get()       Gets information on a specific quaggan.
 
     PUBLIC PROPERTIES
-    _broker     Broker object uses for communication.
+    _broker     Broker GW2_API uses for communication.
     ids         Dictionary of all Quaggans.
     """
     _endpoint_url = '/v2/quaggans'
 
     def __init__(self, broker=None):
         """
-        Prepares an object for use.
+        Prepares an GW2_API for use.
 
         PARAMETERS
         broker      Broker to use for requests. If not specified, creates one.
         """
-        self._broker = GuildWars2_Broker()
-        if broker:
-            self._broker = broker
+        super(Quaggans, self).__init__(broker=broker)
         self.ids = self._broker.make_request(self._endpoint_url)
 
-    def get(self, quaggan_name):
-        """
-        Gets a specific quaggan from the list.
 
-        PARAMETERS
-        quaggan_name        String, list of strings, or list of tuples of the
-                                quaggans to get.
-
-        RETURN VALUES
-        None if any of the specified quaggans are not in self.ids. Returns a
-        dictionary of information otherwise. See the following URL for details:
-        http://wiki.guildwars2.com/wiki/API:2/quaggans
-        """
-        if type(quaggan_name) in (list, tuple):
-            if all(item in self.ids for item in quaggan_name):
-                return self._broker.make_request(
-                    self._endpoint_url, params={'ids': ','.join(quaggan_name)})
-            else:
-                return None
-        else:
-            if quaggan_name not in self.ids:
-                return None
-            else:
-                return self._broker.make_request(
-                    '{0}/{1}'.format(self._endpoint_url, quaggan_name))
-
-
-class Worlds(object):
+class Worlds(GW2_API):
     """
     Interface to the Worlds API.
 
@@ -499,7 +472,7 @@ class Worlds(object):
     get()           Get a specific id or list or tuple of ids.
 
     PUBLIC PROPERTIES
-    _broker         Broker object used for requests.
+    _broker         Broker GW2_API used for requests.
     _endpoint_url   String of the API endpoint URL.
     ids             List of integer IDs available.
     """
@@ -507,14 +480,12 @@ class Worlds(object):
 
     def __init__(self, broker=None):
         """
-        Prepares an object for use.
+        Prepares an GW2_API for use.
 
         PARAMETERS
-        broker      Broker object for requests. Creates one if not specified.
+        broker      Broker GW2_API for requests. Creates one if not specified.
         """
-        self._broker = GuildWars2_Broker()
-        if broker:
-            self._broker = broker
+        super(Worlds, self).__init__(broker=broker)
         self.ids = self._broker.make_request(self._endpoint_url)
 
     def get(self, world_id):
@@ -527,27 +498,10 @@ class Worlds(object):
 
         RETURN VALUES
         Returns None if world_id is not an int, list or tuple, or if any
-        world_ids are not in self.ids. Returns a World object or list of World
-        objects otherwise.
+        world_ids are not in self.ids. Returns a World GW2_API or list of World
+        GW2_APIs otherwise.
         """
-        if type(world_id) in (list, tuple):
-            if not all(world in self.ids for world in world_id):
-                return None
-            else:
-                world_id = [str(wid) for wid in world_id]
-                return [World(item)
-                        for item in
-                        self._broker.make_request(self._endpoint_url,
-                                                  {'ids': ','.join(world_id)})
-                        ]
-        elif type(world_id) is int:
-            if world_id not in self.ids:
-                return None
-            else:
-                return World(self._broker.make_request(self._endpoint_url,
-                                                       {'id': world_id}))
-        else:
-            return None
+        return super(Worlds, self).get(world_id, World)
 
 class World(object):
     """
@@ -601,15 +555,15 @@ if __name__ == '__main__':
     import pprint
 
     # Test Account
-    account = Account(broker=broker)
-    print(account)
-    print(account.id)
-    pprint.pprint(account.guilds)
-    print(account.world)
-    print(account.bank)
-    pprint.pprint(account.bank.contents)
-    print(account.materials)
-    pprint.pprint(account.materials.contents)
+    # account = Account(broker=broker)
+    # print(account)
+    # print(account.id)
+    # pprint.pprint(account.guilds)
+    # print(account.world)
+    # print(account.bank)
+    # pprint.pprint(account.bank.contents)
+    # print(account.materials)
+    # pprint.pprint(account.materials.contents)
 
     # Test Worlds
     # worlds = Worlds(broker=broker)
@@ -617,13 +571,13 @@ if __name__ == '__main__':
     # pprint.pprint(worlds.get([1021, 1022, 1023]))
 
     # Test Quaggans
-    # quaggans = Quaggans(broker=broker)
-    # pprint.pprint(quaggans.ids)
-    # pprint.pprint(quaggans.get('404'))
-    # pprint.pprint(quaggans.get(['404', 'rain', 'scifi']))
+    quaggans = Quaggans(broker=broker)
+    pprint.pprint(quaggans.ids)
+    pprint.pprint(quaggans.get('404'))
+    pprint.pprint(quaggans.get(['404', 'rain', 'scifi']))
 
     # Test Colors
-    # colors = Colors(broker=broker)
-    # pprint.pprint(colors.ids)
-    # pprint.pprint(colors.get(10))
-    # pprint.pprint(colors.get([10, 11, 12, 13]))
+    colors = Colors(broker=broker)
+    pprint.pprint(colors.ids)
+    pprint.pprint(colors.get(10))
+    pprint.pprint(colors.get([10, 11, 12, 13]))
