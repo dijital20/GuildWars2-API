@@ -40,7 +40,8 @@ class GuildWars2_Broker(object):
     def __init__(self):
         self._token = None
 
-    def make_request(self, endpoint_url, params=None, payload=None, headers=None,
+    def make_request(self, endpoint_url, params=None, payload=None,
+                     headers=None,
                      auth=False):
         """
         Make a request to the Guild Wars 2 API.
@@ -73,7 +74,6 @@ class GuildWars2_Broker(object):
                            'URL: {0}\n'
                            'Error: {1}'.format(api_url, e))
         return json.loads(resp.read())
-
 
     def token_from_file(self, file_path):
         """
@@ -243,7 +243,7 @@ class Colors(object):
                 color_id = [str(cid) for cid in color_id]
                 return [Color(item)
                         for item in self._broker.make_request(
-                            self._endpoint_url, {'ids': ','.join(color_id)})]
+                        self._endpoint_url, {'ids': ','.join(color_id)})]
         elif type(color_id) is int:
             if color_id not in self.ids:
                 return None
@@ -253,6 +253,7 @@ class Colors(object):
                                               {'id': color_id}))
         else:
             return None
+
 
 class Color(object):
     """
@@ -266,6 +267,7 @@ class Color(object):
     leather     Dict of leather properties.
     metal       Dict of metal properties.
     """
+
     def __init__(self, color_dict):
         """
         Creates a color object for use.
@@ -285,6 +287,7 @@ class Color(object):
         String representation: "Color {name} ({id})"
         """
         return 'Color {0} ({1})'.format(self.name, self.id)
+
 
 class Assets(object):
     _endpoint_url = '/v2/files'
