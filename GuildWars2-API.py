@@ -59,20 +59,26 @@ class GuildWars2_Broker(object):
         RETURN VALUES
         Python formatted JSON (dict)
         """
+        # Build the url, including params if they are given.
         api_url = '{0}{1}'.format(self._base_url, endpoint_url)
         if params:
             api_url = '{0}?{1}'.format(api_url, urllib.urlencode(params))
+        # Build the payload.
         api_payload = payload
+        # Get the standard headers and amend any provided headers.
         api_headers = self.std_headers(auth)
         if headers:
             api_headers.update(headers)
+        # Build the request.
         req = urllib2.Request(api_url, data=api_payload, headers=api_headers)
+        # Call the request and get response.
         try:
             resp = urllib2.urlopen(req)
         except (urllib2.HTTPError, urllib2.URLError) as e:
             raise APIError('There was an error with the request.\n'
                            'URL: {0}\n'
                            'Error: {1}'.format(api_url, e))
+        # Return the results.
         return json.loads(resp.read())
 
     def token_from_file(self, file_path):
