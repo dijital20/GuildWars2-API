@@ -702,3 +702,7 @@ if __name__ == '__main__':
     # Recipes
     recipes = Recipes(broker=broker)
     pprint.pprint(recipes.get([9892, 9903, 5501]))
+
+    # Test assets
+    assets = Assets(broker=broker)
+    pprint.pprint(assets.get('map_trading_post'))
