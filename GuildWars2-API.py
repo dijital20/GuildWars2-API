@@ -411,6 +411,7 @@ class Character(GW2AuthenticatedAPI):
 
     def __init__(self, broker=None, token=None):
         super(Character, self).__init__(broker=broker, token=token)
+        self.ids = self._broker.make_request(self._endpoint_url, auth=True)
 
 
 class TokenInfo(GW2AuthenticatedAPI):
@@ -673,6 +674,11 @@ if __name__ == '__main__':
     print(account.bank)
     pprint.pprint(account.bank.contents)
     pprint.pprint(account.materials.contents)
+
+    # Test Character
+    character = Character(broker=broker)
+    print(character.ids)
+    print(character.get(u'Paglian'))
 
     # Test Worlds
     worlds = Worlds(broker=broker)
