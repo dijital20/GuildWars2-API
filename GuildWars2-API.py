@@ -663,17 +663,17 @@ if __name__ == '__main__':
     broker = GuildWars2Broker()
     broker.token_from_file(token_file)
 
-    import pprint
+    from pprint import pprint
 
     # Test Account
     account = Account(broker=broker)
     print(account)
     print(account.id)
-    pprint.pprint(account.guilds)
+    pprint(account.guilds)
     print(account.world)
     print(account.bank)
-    pprint.pprint(account.bank.contents)
-    pprint.pprint(account.materials.contents)
+    pprint(account.bank.contents)
+    pprint(account.materials.contents)
 
     # Test Character
     character = Character(broker=broker)
@@ -683,32 +683,32 @@ if __name__ == '__main__':
     # Test Worlds
     worlds = Worlds(broker=broker)
     print(worlds.get(1021))
-    pprint.pprint(worlds.get([1021, 1022, 1023]))
+    pprint(worlds.get([1021, 1022, 1023]))
 
     # Test Quaggans
     quaggans = Quaggans(broker=broker)
-    pprint.pprint(quaggans.get('404'))
-    pprint.pprint(quaggans.get(['404', 'rain', 'scifi']))
-    pprint.pprint(quaggans.get('all'))
+    pprint(quaggans.get('404'))
+    pprint(quaggans.get(['404', 'rain', 'scifi']))
+    pprint(quaggans.get('all'))
 
     # Test Colors
     colors = Colors(broker=broker)
-    pprint.pprint(colors.get(10))
-    pprint.pprint(colors.get([10, 11, 12, 13]))
+    pprint(colors.get(10))
+    pprint(colors.get([10, 11, 12, 13]))
 
     # Test Maps
     maps = Maps(broker=broker)
-    pprint.pprint(maps.get(523))
-    pprint.pprint(maps.get([523, 524, 525]))
+    pprint(maps.get(523))
+    pprint(maps.get([523, 524, 525]))
 
     # Continents
     continents = Continents(broker=broker)
-    pprint.pprint(continents.get([1, 2]))
+    pprint(continents.get([1, 2]))
 
     # Recipes
     recipes = Recipes(broker=broker)
-    pprint.pprint(recipes.get([9892, 9903, 5501]))
+    pprint(recipes.get([9892, 9903, 5501]))
 
     # Test assets
     assets = Assets(broker=broker)
-    pprint.pprint(assets.get('map_trading_post'))
+    pprint(assets.get('map_trading_post'))
