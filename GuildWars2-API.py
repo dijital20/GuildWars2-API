@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 import logging
 import os
@@ -84,12 +85,13 @@ class GuildWars2Broker(object):
 
     _base_url = 'https://api.guildwars2.com'
 
-    def __init__(self):
+    def __init__(self, wait_time=15):
         self._token = None
+        self._last_call = None
+        self._wait = wait_time
 
     def make_request(self, endpoint_url, params=None, payload=None,
-                     headers=None,
-                     auth=False):
+                     headers=None, auth=False):
         """
         Make a request to the Guild Wars 2 API.
 
@@ -133,11 +135,15 @@ class GuildWars2Broker(object):
                      '    Headers: {2}'.format(api_url, api_payload,
                                                api_headers))
         req = urllib2.Request(api_url, data=api_payload, headers=api_headers)
+        if self._last_call:
+            while (dt.datetime.now() - self._last_call).seconds < self._wait:
+                pass
         # Call the request and get response.
         try:
             resp = urllib2.urlopen(req)
+            self._last_call = dt.datetime.now()
         except (urllib2.HTTPError, urllib2.URLError) as e:
-            logging.error(e)
+            logger.error(e)
             raise APIError('There was an error with the request.\n'
                            'URL: {0}\n'
                            'Error: {1}'.format(api_url, e))
@@ -203,10 +209,10 @@ class GW2API(object):
     def get(self, object_ids, item_type=None):
         if type(object_ids) in (list, tuple):
             if not all(item in self.ids for item in object_ids):
-                logging.error('At least one item in object_ids is not in '
-                              'self.ids. Returning None.\n'
-                              '    object_ids: {0}\n'
-                              '    self.ids: {1}'.format(object_ids, self.ids))
+                logger.error('At least one item in object_ids is not in '
+                             'self.ids. Returning None.\n'
+                             '    object_ids: {0}\n'
+                             '    self.ids: {1}'.format(object_ids, self.ids))
                 return None
             else:
                 object_ids = [str(item) for item in object_ids]
@@ -225,9 +231,9 @@ class GW2API(object):
                 else:
                     return res
             if object_ids not in self.ids:
-                logging.error('object_ids not in self.ids. Returning None.\n'
-                              '    object_ids: {0}\n'
-                              '    self.ids: {1}'.format(object_ids, self.ids))
+                logger.error('object_ids not in self.ids. Returning None.\n'
+                             '    object_ids: {0}\n'
+                             '    self.ids: {1}'.format(object_ids, self.ids))
                 return None
             else:
                 res = self._broker.make_request(self._endpoint_url,
@@ -240,24 +246,25 @@ class GW2API(object):
 
 class GW2AuthenticatedAPI(GW2API):
     def __init__(self, broker=None, token=None):
+        super(GW2AuthenticatedAPI, self).__init__(broker=broker)
         if not token and not broker:
-            logging.error('Neither token nor broker specified.')
+            logger.error('Neither token nor broker specified.')
             raise AuthorizationRequired('This object requires a broker object '
                                         'with a token or a token string or '
                                         'file.')
         elif token and not broker:
-            self.debug('Creating new broker.')
+            logger.debug('Creating new broker.')
             self._broker = GuildWars2Broker()
             if os.path.exists(token):
-                self.debug('Loading token from file: {0}'.format(token))
+                logger.debug('Loading token from file: {0}'.format(token))
                 self._broker.token_from_file(token)
             else:
-                self.debug('Setting token to string: {0}'.format(token))
+                logger.debug('Setting token to string: {0}'.format(token))
                 self._broker.token_from_string(token)
         elif broker and not token:
             if type(broker) is not GuildWars2Broker or not broker._token:
-                logging.error('Either broker is not GuildWars2Broker or broker '
-                              'has no token.')
+                logger.error('Either broker is not GuildWars2Broker or broker '
+                             'has no token.')
                 raise AuthorizationRequired('This object requires a broker '
                                             'object with a token.')
             self._broker = broker
@@ -396,7 +403,7 @@ class OwnedItem(object):
 
     def __repr__(self):
         if self.item_id:
-            return 'Item {0} x {1}'.format(self.item_id, self.count)
+            return '{0} x {1}'.format(self.item.get('name'), self.count)
         else:
             return 'No Item'
 
@@ -676,9 +683,10 @@ if __name__ == '__main__':
     pprint(account.materials.contents)
 
     # Test Character
-    character = Character(broker=broker)
-    print(character.ids)
-    print(character.get(u'Paglian'))
+    # character = Character(broker=broker)
+    # print(character.ids)
+    # for id in character.ids:
+    #     print(character.get(id))
 
     # Test Worlds
     worlds = Worlds(broker=broker)
