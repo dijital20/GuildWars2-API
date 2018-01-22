@@ -229,6 +229,10 @@ class Account(GW2Thing):
 class Character(GW2Thing):
     _endpoint_url = 'v2/characters'
 
+    def __init__(self, id, session=None):
+        super(Character, self).__init__(id, session=session)
+        self.guild = Guild(self.guild, session=session)
+
 
 class Characters(GW2List):
     _endpoint_url = 'v2/characters'
