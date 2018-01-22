@@ -2,8 +2,12 @@ import json
 import logging
 import os
 import sys
-import urllib
-import urllib2
+try:
+    from urllib import urlencode
+    from urllib2 import urlopen, Request, HTTPError, URLError
+except ImportError:
+    from urllib.parse import urlencode
+    from urllib.request import urlopen, Request, HTTPError, URLError
 
 # Implemented:
 # /v2/account --> Done
@@ -60,7 +64,7 @@ import urllib2
 logger = logging.getLogger('__main__')
 logger.setLevel(logging.DEBUG)
 # Log File Handler
-log_handler = logging.FileHandler('GuildWars2-API.log', mode='w')
+log_handler = logging.FileHandler('GuildWars2API.log', mode='w')
 log_handler.setLevel(logging.DEBUG)
 log_handler.setFormatter(logging.Formatter('%(asctime)s <%(levelname)s> '
                                            '<%(module)s:%(lineno)d> '
@@ -119,7 +123,7 @@ class GuildWars2Broker(object):
         # Build the url, including params if they are given.
         api_url = '{0}{1}'.format(self._base_url, endpoint_url)
         if params:
-            api_url = '{0}?{1}'.format(api_url, urllib.urlencode(params))
+            api_url = '{0}?{1}'.format(api_url, urlencode(params))
         # Build the payload.
         api_payload = payload
         # Get the standard headers and amend any provided headers.
@@ -132,11 +136,11 @@ class GuildWars2Broker(object):
                      '    Data: {1}\n'
                      '    Headers: {2}'.format(api_url, api_payload,
                                                api_headers))
-        req = urllib2.Request(api_url, data=api_payload, headers=api_headers)
+        req = Request(api_url, data=api_payload, headers=api_headers)
         # Call the request and get response.
         try:
-            resp = urllib2.urlopen(req)
-        except (urllib2.HTTPError, urllib2.URLError) as e:
+            resp = urlopen(req)
+        except (HTTPError, URLError) as e:
             logging.error(e)
             raise APIError('There was an error with the request.\n'
                            'URL: {0}\n'
@@ -195,10 +199,11 @@ class GW2API(object):
     _endpoint_url = ''
 
     def __init__(self, broker=None):
+        logger.debug('{} init with {}'.format(self.__class__.__name__, locals()))
         self._broker = GuildWars2Broker()
         if broker and type(broker) is GuildWars2Broker:
             self._broker = broker
-        self.ids = None
+        self.ids = []
 
     def get(self, object_ids, item_type=None):
         if type(object_ids) in (list, tuple):
@@ -240,6 +245,8 @@ class GW2API(object):
 
 class GW2AuthenticatedAPI(GW2API):
     def __init__(self, broker=None, token=None):
+        logger.debug(
+            '{} init with {}'.format(self.__class__.__name__, locals()))
         if not token and not broker:
             logging.error('Neither token nor broker specified.')
             raise AuthorizationRequired('This object requires a broker object '
@@ -261,7 +268,7 @@ class GW2AuthenticatedAPI(GW2API):
                 raise AuthorizationRequired('This object requires a broker '
                                             'object with a token.')
             self._broker = broker
-        self.ids = None
+        self.ids = []
 
 
 # Error Objects ----------------------------------------------------------------
@@ -658,6 +665,47 @@ class World(object):
         return self.name
 
 
+class Guilds(GW2API):
+    _endpoint_url = '/v2/guild/search'
+
+    def get(self, guild_name):
+        res = self._broker.make_request(
+            self._endpoint_url, {'name': guild_name})
+        return [Guild(g, broker=self._broker) for g in res]
+
+
+class Guild(GW2API):
+    _endpoint_url = '/v2/guild/'
+
+    def __init__(self, guild_id, broker=None):
+        super(Guild, self).__init__(broker=broker)
+        self._endpoint_url = Guild._endpoint_url + guild_id
+        self.get()
+
+    def get(self):
+        res = self._broker.make_request(self._endpoint_url)
+        self.__dict__.update(res)
+        return res
+
+    def upgrades(self):
+        return MyGuildUpgrades(self.id, broker=self._broker)
+
+
+class GuildUpgrades(GW2API):
+    _endpoint_url = '/v2/guild/upgrades'
+
+
+class MyGuildUpgrades(GW2AuthenticatedAPI):
+    _endpoint_url = '/v2/guild/{}/upgrades'
+
+    def __init__(self, guild_id, broker=None):
+        self._endpoint_url = MyGuildUpgrades._endpoint_url.format(guild_id)
+        super(MyGuildUpgrades, self).__init__(broker=broker)
+
+    def get(self):
+        return self._broker.make_request(self._endpoint_url)
+
+
 if __name__ == '__main__':
     token_file = 'token.txt'
     broker = GuildWars2Broker()
@@ -712,3 +760,7 @@ if __name__ == '__main__':
     # Test assets
     assets = Assets(broker=broker)
     pprint.pprint(assets.get('map_trading_post'))
+
+    # Test Guild Upgrades
+    upgrades = GuildUpgrades(broker=broker)
+    pprint.pprint(upgrades.get())
