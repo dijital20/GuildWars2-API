@@ -1,6 +1,8 @@
 import logging
+import time
 
 from json import JSONDecodeError, loads
+from multiprocessing.pool import ThreadPool
 from pprint import pformat
 from urllib.parse import urlencode
 from urllib.request import Request, HTTPError, URLError, urlopen
@@ -8,7 +10,7 @@ from urllib.request import Request, HTTPError, URLError, urlopen
 
 # Module level log.
 MODULE_LOG = logging.getLogger('GuildWars2API')
-MODULE_LOG.setLevel(logging.DEBUG)
+MODULE_LOG.setLevel(logging.INFO)
 # File Handler
 file_handler = logging.FileHandler(
     'GuildWars2API.log', mode='w', encoding='utf-8')
@@ -160,11 +162,12 @@ class GW2Thing(GW2API):
 class GW2List(GW2API):
     _thing_type = GW2Thing
 
-    def __init__(self, session=None, auth=False):
+    def __init__(self, session=None, auth=False, ids=None):
         super(GW2List, self).__init__(session=session)
         self._things = None
         self.count = 0
         self._auth = auth
+        self._ids = ids
 
     def __iter__(self):
         if self._things is None:
@@ -172,25 +175,44 @@ class GW2List(GW2API):
         return iter(self._things)
 
     def __repr__(self):
-        items = '(Empty)' if self._things is None \
-            else f'{len(self._things)} items'
+        item_name = self._thing_type.__name__
+        items = f'{len(self._things)} {item_name} items' \
+            if self._things is not None \
+            else f'{len(self._ids)} {item_name} items' \
+            if self._ids is not None \
+            else f'?? {item_name} items'
         return f'<{self.__class__.__name__} {items}>'
 
     def refresh(self):
-        self._log.info('Refreshing {}'.format(self))
-        things = self._session.make_request(self._endpoint_url, auth=self._auth)
-        self._things = []
-        for thing in things:
-            self._log.debug(f'Processing: {thing}')
-            if thing and thing.get('id'):
-                thing_obj = self._thing_type(
-                    thing.get('id'), session=self._session)
-                thing_obj._update_obj(thing)
-                self._things.append(thing_obj)
-            else:
-                self._log.warning(f'Skipping: {thing}')
+        self._log.info(f'Refreshing {self}')
+        timer = time.time()
+        if self._ids is None:
+            things_to_get = self._session.make_request(
+                self._endpoint_url, auth=self._auth)
+        else:
+            things_to_get = self._ids
+        with ThreadPool() as pool:
+            got_things = pool.map(
+                self.get_thing,
+                [(self._session, self._thing_type, t)
+                 for t in things_to_get]
+            )
+        self._things = [t for t in got_things if t is not None]
         self.count = len(self._things)
-        self._log.info(f'Found {self.count} items')
+        req_time = time.time() - timer
+        self._log.info(f'Found {self.count} items in {req_time:4.2f}s')
+
+    @staticmethod
+    def get_thing(args):
+        session, thing_type, thing = args
+        if isinstance(thing, dict) and thing.get('id'):
+            thing_obj = thing_type(thing.get('id'), session=session)
+            thing_obj._update_obj(thing)
+        elif isinstance(thing, str):
+            thing_obj = thing_type(thing, session=session)
+        else:
+            return None
+        return thing_obj
 
 
 class GW2Enum(GW2API):
@@ -236,7 +258,7 @@ class Account(GW2Thing):
     def __init__(self, session=None):
         super(Account, self).__init__(session=session, auth=True)
         self.world = World(self.world, session=session)
-        self.guilds = [Guild(g, session=session) for g in self.guilds]
+        self.guilds = MyGuilds(ids=self.guilds, session=session)
         self.bank = Bank(session=session)
         self.characters = Characters(session=session)
         self._log.debug(f'Account initialized with {self.__dict__}')
@@ -249,23 +271,14 @@ class Character(GW2Thing):
     def __init__(self, id, session=None):
         super(Character, self).__init__(id, session=session)
         self.guild = Guild(self.guild, session=session)
+        self.recipes = MyRecipes(ids=self.recipes, session=session)
+        self.equipment = MyEquipment(ids=self.equipment, session=session)
 
 
 class Characters(GW2List):
     _endpoint_url = 'v2/characters'
     _thing_type = Character
     _required_scopes = ['characters']
-
-    def refresh(self):
-        self._log.info('Refreshing {}'.format(self))
-        things = self._session.make_request(self._endpoint_url, auth=self._auth)
-        self._things = []
-        for thing in things:
-            self._log.debug(f'Processing: {thing}')
-            thing_obj = self._thing_type(thing, session=self._session)
-            self._things.append(thing_obj)
-        self.count = len(self._things)
-        self._log.info(f'Found {self.count} items')
 
 
 class Guild(GW2Thing):
@@ -278,6 +291,10 @@ class Guild(GW2Thing):
 
 class Guilds(GW2Enum):
     _endpoint_url = 'v2/guild'
+    _thing_type = Guild
+
+
+class MyGuilds(GW2List):
     _thing_type = Guild
 
 
@@ -299,6 +316,27 @@ class Items(GW2Enum):
     _thing_type = Item
 
 
+class Recipe(GW2Thing):
+    _endpoint_url = 'v2/recipes'
+
+
+class Recipes(GW2Enum):
+    _endpoint_url = 'v2/recipes'
+    _thing_type = Recipe
+
+
+class MyRecipes(GW2List):
+    _thing_type = Recipe
+
+
+class EquippedItem(Item):
+    pass
+
+
+class MyEquipment(GW2List):
+    _thing_type = EquippedItem
+
+
 class BankItem(Item):
     def __repr__(self):
         item_name = self.__class__.__name__
@@ -314,8 +352,10 @@ class Bank(GW2List):
 
 
 if __name__ == '__main__':
+    import sys
     logging.basicConfig(
         level=logging.INFO,
+        stream=sys.stdout,
         format='%(asctime)s %(levelname)s - %(name)s - %(message)s'
     )
 
