@@ -23,6 +23,10 @@ class AuthorizationRequiredError(Exception):
     pass
 
 
+class TokenMissingScope(Exception):
+    pass
+
+
 class APIError(Exception):
     pass
 
@@ -98,6 +102,7 @@ class GW2APISession(object):
 
 class GW2API(object):
     _endpoint_url = ''
+    _required_scopes = []
 
     def __init__(self, session=None):
         self._log.debug(
@@ -106,6 +111,16 @@ class GW2API(object):
         self._session = session \
             if isinstance(session, GW2APISession) \
             else GW2APISession()
+        if self._required_scopes:
+            scopes = self._session.token_info.permissions \
+                if self._session.token_info else []
+            if not all(s in scopes for s in self._required_scopes):
+                err = f'{self.__class__.__name__} is missing required ' \
+                      f'scopes.\n' \
+                      f'Need: {self._required_scopes}\n' \
+                      f'Have: {scopes}'
+                self._log.error(err)
+                raise TokenMissingScope(err)
 
     @property
     def _log(self):
@@ -216,6 +231,7 @@ class Token(GW2Thing):
 
 class Account(GW2Thing):
     _endpoint_url = 'v2/account'
+    _required_scopes = ['account']
 
     def __init__(self, session=None):
         super(Account, self).__init__(session=session, auth=True)
@@ -228,6 +244,7 @@ class Account(GW2Thing):
 
 class Character(GW2Thing):
     _endpoint_url = 'v2/characters'
+    _required_scopes = ['characters']
 
     def __init__(self, id, session=None):
         super(Character, self).__init__(id, session=session)
@@ -237,6 +254,7 @@ class Character(GW2Thing):
 class Characters(GW2List):
     _endpoint_url = 'v2/characters'
     _thing_type = Character
+    _required_scopes = ['characters']
 
     def refresh(self):
         self._log.info('Refreshing {}'.format(self))
@@ -292,6 +310,7 @@ class BankItem(Item):
 class Bank(GW2List):
     _endpoint_url = 'v2/account/bank'
     _thing_type = BankItem
+    _required_scopes = ['inventories']
 
 
 if __name__ == '__main__':
