@@ -90,8 +90,7 @@ class GW2APISession(object):
             return {'Authorization': f'Bearer {self.token}'}
         return {}
 
-    def make_request(self, url, params=None, data=None, headers=None,
-                     auth=False):
+    def make_request(self, url, params=None, data=None, headers=None):
         """
         Make an API request.
 
@@ -102,9 +101,6 @@ class GW2APISession(object):
             headers (dict, optional): Headers to send on the request. Starts
                 with the self._headers, and updates that dictionary with these
                 values.
-            auth (bool): Should we require authorization on this request?
-                Defaults to False. If true, and no token is present,
-                will raise an exception.
 
         Returns (dict):
             Dictionary converted from the JSON data returned.
@@ -115,16 +111,10 @@ class GW2APISession(object):
             APIError: If we have trouble contacting the endpoint, or the data
                 that comes back can't be converted properly.
         """
-        if auth and not self.token:
-            self._log.error(f'auth specified, but token = {repr(self.token)}')
-            raise AuthorizationRequiredError(
-                'This request requires authentication that is not present. '
-                'Please set a token using load_token() or setting token to a '
-                'string value.'
-            )
         api_url = f'{GW2APISession._base_url}/{url}'
         if params:
-            api_url = f'{api_url}?{urlencode(params)}'
+            params = urlencode(params, safe=',')
+            api_url = f'{api_url}?{params}'
         api_data = data
         api_headers = self._headers
         if headers:
@@ -165,6 +155,10 @@ class GW2API(object):
         Args:
             session (GW2APISession, optional): A session object. Defaults to
                 None, which results in a new session.
+
+        Raises:
+            TokenMissingScope: If the object requires a scope and the session
+                does not have a token with the appropriate scopes.
         """
         self._log.debug(
             f'{self.__class__.__name__} init with session {session}'
@@ -173,9 +167,8 @@ class GW2API(object):
             if isinstance(session, GW2APISession) \
             else GW2APISession()
         if self._required_scopes:
-            scopes = self._session.token_info.permissions \
-                if self._session.token_info else []
-            if not all(s in scopes for s in self._required_scopes):
+            scopes = getattr(self._session.token_info, 'permissions', [])
+            if not all(s in scopes for s in scopes):
                 err = f'{self.__class__.__name__} is missing required ' \
                       f'scopes.\n' \
                       f'Need: {self._required_scopes}\n' \
@@ -196,7 +189,7 @@ class GW2Thing(GW2API):
 
     Ensure the _endpoint_url class variable is set specific for the item.
     """
-    def __init__(self, id=None, session=None, auth=False):
+    def __init__(self, id=None, session=None):
         """
         Prepares a GW2Thing for use.
 
@@ -205,15 +198,14 @@ class GW2Thing(GW2API):
             session (GW2APISession, optiona): Session to make requests from.
                 Defaults to None, which results in a new session. Session is
                 passed to child objects.
-            auth (bool, optional): Should the request required
             authentication? Defaults to False.
         """
         super(GW2Thing, self).__init__(session=session)
-        params = {} if id is None else {'id': id}
-        info = self._session.make_request(
-            self._endpoint_url, params=params, auth=auth)
-        self._log.debug(f'Response:\n{pformat(info)}')
-        self._update_obj(info)
+        if isinstance(id, dict):
+            self._update_obj(id)
+        else:
+            self.id = id
+            self.refresh()
         self._log.info(f'Initialized {self}')
 
     def __repr__(self):
@@ -243,6 +235,12 @@ class GW2Thing(GW2API):
                           for k, v in self.__dict__.items()
                           if not callable(v) and not k.startswith('_')])
 
+    def refresh(self):
+        params = {} if getattr(self, 'id', None) is None else {'id': self.id}
+        info = self._session.make_request(self._endpoint_url, params=params)
+        self._log.debug(f'Response:\n{pformat(info)}')
+        self._update_obj(info)
+
 
 class GW2List(GW2API):
     """
@@ -257,23 +255,22 @@ class GW2List(GW2API):
     _thing_type should be a GW2Thing subclass.
     """
     _thing_type = GW2Thing
+    _enum_type = None
 
-    def __init__(self, session=None, auth=False, ids=None):
+    def __init__(self, session=None, ids=None):
         """
         Prepares a GW2List for initial use.
 
         Args:
             session (GW2APISession, optional): Session to use to make requests.
-            auth (bool, optional): Should the call be authorized?
             ids (list or tuple, optional): List or tuple of Ids. Defaults to
                 None (which makes an API call).
         """
         super(GW2List, self).__init__(session=session)
         self._things = None
         self.count = 0
-        self._auth = auth
         self._ids = ids if ids else self._session.make_request(
-                self._endpoint_url, auth=self._auth)
+            self._endpoint_url)
         self._log.info(f'Initialized {self}')
 
     def __iter__(self):
@@ -303,13 +300,23 @@ class GW2List(GW2API):
         self._log.info(f'Refreshing {self}')
         self._log.debug(f'ID list to query:\n{pformat(self._ids)}')
         timer = time.time()
-        with ThreadPool(1) as pool:
-            got_things = pool.map(
-                self.get_thing,
-                [(self._session, self._thing_type, t)
-                 for t in self._ids]
-            )
-        self._things = [t for t in got_things if t is not None]
+        if self._enum_type and all(isinstance(i, dict) for i in self._ids):
+            got_things = self._enum_type(session=self._session)\
+                .get([i.get('id') for i in self._ids])
+            for got_thing, orig_thing in zip(got_things, self._ids):
+                if got_thing.id == orig_thing.get('id'):
+                    got_thing._update_obj(orig_thing)
+            self._things = got_things
+        elif self._enum_type:
+            self._things = self._enum_type.get(self._ids)
+        else:
+            with ThreadPool(1) as pool:
+                got_things = pool.map(
+                    self.get_thing,
+                    [(self._session, self._thing_type, t)
+                     for t in self._ids]
+                )
+            self._things = [t for t in got_things if t is not None]
         self.count = len(self._things)
         req_time = time.time() - timer
         self._log.info(f'Found {self.count} items in {req_time:4.2f}s')
@@ -368,8 +375,8 @@ class GW2Enum(GW2API):
         Get a specified item by id.
 
         Args:
-            id (str, optional): ID to call for. Defaults to None, which is
-                replaced with 'all'.
+            id (str or list, optional): ID to call for. Defaults to None,
+                which is replaced with 'all'.
 
         Returns (GW2Thing):
             A GW2Thing of the type in self._thing_type with the object.
@@ -377,15 +384,18 @@ class GW2Enum(GW2API):
         if id is None:
             id = 'all'
         if any(isinstance(id, t) for t in (list, tuple)):
-            return [
-                self._thing_type(g)
-                for g in self._session.make_request(
-                    self._endpoint_url, {'ids': id}
-                )
-            ]
+            for i in range(0, len(id), 3):
+                ids = ','.join([str(a) for a in id[i:i+20]])
+                return [
+                    self._thing_type(g, session=self._session)
+                    for g in self._session.make_request(
+                        self._endpoint_url, params={'ids': ids}
+                    )
+                ]
         else:
             return self._thing_type(
-                self._session.make_request(self._endpoint_url, {'id': id})
+                self._session.make_request(self._endpoint_url, {'id': id}),
+                session=self._session,
             )
 
 
@@ -411,11 +421,12 @@ class Account(GW2Thing):
     _required_scopes = ['account']
 
     def __init__(self, session=None):
-        super(Account, self).__init__(session=session, auth=True)
+        super(Account, self).__init__(session=session)
         self.world = World(self.world, session=session)
         self.guilds = MyGuilds(ids=self.guilds, session=session)
         self.bank = Bank(session=session)
         self.characters = MyCharacters(session=session)
+        self.achievements = MyAchievements(session=session)
         self._log.debug(f'Account initialized with {self.__dict__}')
 
 
@@ -526,6 +537,22 @@ class Bank(GW2List):
     _required_scopes = ['inventories']
 
 
+class Achievement(GW2Thing):
+    _endpoint_url = 'v2/achievements'
+
+
+class Achievements(GW2Enum):
+    _endpoint_url = 'v2/achievements'
+    _thing_type = Achievement
+
+
+class MyAchievements(GW2List):
+    _endpoint_url = 'v2/account/achievements'
+    _thing_type = Achievement
+    _enum_type = Achievements
+    _required_scopes = ['progression']
+
+
 if __name__ == '__main__':
     import sys
     logging.basicConfig(
@@ -546,10 +573,16 @@ if __name__ == '__main__':
     #     print(i.details)
     #     print()
 
-    me.characters.refresh()
-    print('Characters:\n')
-    for c in me.characters:
-        print(c.details)
-        for e in c.equipment:
-            print(e)
+    me.achievements.refresh()
+    print('Achievements:\n')
+    for a in me.achievements:
+        print(a.details)
         print()
+
+    # me.characters.refresh()
+    # print('Characters:\n')
+    # for c in me.characters:
+    #     print(c.details)
+    #     for e in c.equipment:
+    #         print(e)
+    #     print()
