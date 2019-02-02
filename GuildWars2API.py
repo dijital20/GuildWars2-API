@@ -10,15 +10,6 @@ from urllib.request import Request, HTTPError, URLError, urlopen
 
 # Module level log.
 MODULE_LOG = logging.getLogger('GuildWars2API')
-MODULE_LOG.setLevel(logging.DEBUG)
-# File Handler
-file_handler = logging.FileHandler(
-    'GuildWars2API.log', mode='w', encoding='utf-8')
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(logging.Formatter(
-    '%(asctime)s %(levelname)s - %(name)s - %(message)s'
-))
-MODULE_LOG.addHandler(file_handler)
 
 
 class AuthorizationRequiredError(Exception):
